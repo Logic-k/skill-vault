@@ -7,6 +7,7 @@ export type SkillKind =
   | 'npm-package'
   | 'python-package'
   | 'repo'
+  | 'website'
 
 export const KIND_LABEL: Record<SkillKind, string> = {
   'claude-skill': 'Claude 스킬',
@@ -17,6 +18,31 @@ export const KIND_LABEL: Record<SkillKind, string> = {
   'npm-package': 'npm 패키지',
   'python-package': 'Python 패키지',
   repo: '일반 저장소',
+  website: 'AI 웹사이트',
+}
+
+export type Pricing = 'free' | 'freemium' | 'paid' | 'unknown'
+export const PRICING_LABEL: Record<Pricing, string> = { free: '무료', freemium: '부분 무료', paid: '유료', unknown: '가격 미확인' }
+
+/** Extra fields for kind === 'website'. `source`/`meta` are filled with the domain so the rest of the UI keeps working. */
+export interface WebInfo {
+  url: string
+  domain: string
+  favicon: string
+  image?: string
+  siteType: string
+  pricing: Pricing
+  publisher?: string
+  lang?: string
+  fetchedWith?: 'microlink' | 'jina' | 'manual'
+}
+
+export interface SiteTypeRule {
+  id: string
+  label: string
+  icon: string
+  keywords: string[]
+  domains?: string[]
 }
 
 export interface RepoRef {
@@ -100,6 +126,7 @@ export interface SavedSkill extends SkillAnalysis {
   /** undefined = 예시 목록처럼 아직 GitHub에서 분석하지 않은 항목 */
   analyzedAt?: string
   addedAt: string
+  web?: WebInfo
 }
 
 export interface CategoryRule {

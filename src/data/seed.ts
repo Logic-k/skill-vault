@@ -1,6 +1,7 @@
 import { categorize, allCategories } from '../lib/categorize'
 import { parseGitHubUrl } from '../lib/github'
 import { skillId } from '../lib/store'
+import { detectPricing, detectSiteType, domainOf, faviconFor, normalizeUrl, webId } from '../lib/web'
 import type { CategoryRule, SavedSkill, SkillKind } from '../lib/types'
 
 /**
@@ -59,9 +60,72 @@ const ITEMS: SeedItem[] = [
   { name: 'free-claude-code', url: 'https://github.com/Alishahryar1/free-claude-code', kind: 'repo', license: 'AGPL-3.0-only', status: 'want', group: '코딩 에이전트 / 프록시', description: 'Claude Code 등 12개 코딩 에이전트를 Anthropic이 아닌 61개 제공자(무료 티어·로컬 포함) 모델로 연결하는 로컬 프록시·런처.', note: '비공식 프로젝트, Anthropic과 무관. 무료 Claude 모델을 주는 것이 아님. 약관 확인 필요.', reason: "2026-10-25 '모르면 손해보는 오픈소스 9가지' 8번, 비공식이라 약관 확인 필요", tags: ['Claude Code', '프록시', '비공식'] },
 ]
 
+interface WebSeed {
+  name: string
+  url: string
+  description: string
+  group: string
+  tags: string[]
+  pricing?: 'free' | 'freemium' | 'paid'
+}
+
+/** AI 웹사이트 예시. GitHub 항목과 달리 "열어서 쓰는" 서비스들이라 사이트 유형·가격 축으로 분류된다. */
+const WEB_ITEMS: WebSeed[] = [
+  { name: 'Perplexity', url: 'https://www.perplexity.ai', description: '출처를 달아 답하는 AI 검색 엔진. 리서치 초안 잡을 때.', group: '검색·리서치', tags: ['검색', '출처'], pricing: 'freemium' },
+  { name: 'NotebookLM', url: 'https://notebooklm.google.com', description: '내 자료(PDF·링크·유튜브)만 근거로 요약·질문·오디오 개요를 만들어 주는 Google 노트.', group: '검색·리서치', tags: ['자료 기반', 'Google'], pricing: 'free' },
+  { name: 'Claude', url: 'https://claude.ai', description: 'Anthropic의 어시스턴트. 긴 문서 분석과 코드, 아티팩트 제작에 강함.', group: '챗봇·어시스턴트', tags: ['Anthropic'], pricing: 'freemium' },
+  { name: 'ChatGPT', url: 'https://chatgpt.com', description: 'OpenAI의 범용 챗봇. 이미지 생성·웹 검색·데이터 분석 통합.', group: '챗봇·어시스턴트', tags: ['OpenAI'], pricing: 'freemium' },
+  { name: 'Hugging Face', url: 'https://huggingface.co', description: '오픈 모델·데이터셋·데모(Spaces) 허브. 모델 찾기와 테스트의 출발점.', group: '모델 허브·API·플랫폼', tags: ['오픈 모델', 'Spaces'], pricing: 'freemium' },
+  { name: 'OpenRouter', url: 'https://openrouter.ai', description: '한 API 키로 수백 개 모델을 골라 쓰는 라우터. 무료 모델도 섞여 있음.', group: '모델 허브·API·플랫폼', tags: ['API', '모델 비교'], pricing: 'freemium' },
+  { name: 'v0', url: 'https://v0.app', description: '말로 설명하면 React·Tailwind UI를 만들어 주는 Vercel의 생성 도구.', group: '코딩·앱 빌더', tags: ['UI 생성', 'Vercel'], pricing: 'freemium' },
+  { name: 'Lovable', url: 'https://lovable.dev', description: '채팅으로 풀스택 웹앱을 만들고 바로 배포하는 앱 빌더.', group: '코딩·앱 빌더', tags: ['바이브코딩'], pricing: 'freemium' },
+  { name: 'Midjourney', url: 'https://www.midjourney.com', description: '스타일 품질이 높은 이미지 생성. 웹 에디터로 변형·확장 가능.', group: '이미지 생성·편집', tags: ['이미지 생성'], pricing: 'paid' },
+  { name: 'Ideogram', url: 'https://ideogram.ai', description: '글자가 정확하게 들어가는 이미지 생성. 포스터·로고 시안에 유용.', group: '이미지 생성·편집', tags: ['타이포그래피'], pricing: 'freemium' },
+  { name: 'ElevenLabs', url: 'https://elevenlabs.io', description: '자연스러운 음성 합성·복제·더빙. 한국어 지원.', group: '음성·음악', tags: ['TTS', '더빙'], pricing: 'freemium' },
+  { name: 'Suno', url: 'https://suno.com', description: '가사와 분위기만 적으면 완성곡을 만들어 주는 음악 생성.', group: '음성·음악', tags: ['음악 생성'], pricing: 'freemium' },
+  { name: 'Runway', url: 'https://runwayml.com', description: '텍스트·이미지에서 영상을 만들고 편집하는 영상 생성 스튜디오.', group: '영상 생성·편집', tags: ['영상 생성'], pricing: 'freemium' },
+  { name: 'Gamma', url: 'https://gamma.app', description: '개요만 주면 발표 자료·문서·웹페이지를 디자인까지 만들어 주는 도구.', group: '디자인·프레젠테이션', tags: ['발표 자료'], pricing: 'freemium' },
+  { name: 'Napkin', url: 'https://www.napkin.ai', description: '글을 붙여넣으면 어울리는 도식·그래픽을 자동으로 그려 주는 시각화 도구.', group: '디자인·프레젠테이션', tags: ['도식', '시각화'], pricing: 'freemium' },
+  { name: "There's An AI For That", url: 'https://theresanaiforthat.com', description: '용도별 AI 도구 디렉터리. 새 도구 찾을 때 먼저 보는 곳.', group: '뉴스·커뮤니티·디렉터리', tags: ['디렉터리'], pricing: 'free' },
+  { name: 'Anthropic 프롬프트 라이브러리', url: 'https://docs.anthropic.com/en/resources/prompt-library/library', description: '용도별로 다듬어진 시스템 프롬프트 모음. 그대로 복사해 쓰거나 변형.', group: '프롬프트·템플릿', tags: ['프롬프트'], pricing: 'free' },
+  { name: 'LMArena', url: 'https://lmarena.ai', description: '익명 모델 두 개를 비교 투표해 만든 리더보드. 모델 고를 때 참고.', group: '모델 허브·API·플랫폼', tags: ['벤치마크', '리더보드'], pricing: 'free' },
+]
+
+function buildWebSeed(rules: CategoryRule[]): SavedSkill[] {
+  return WEB_ITEMS.map((it, i) => {
+    const u = normalizeUrl(it.url)!
+    const domain = domainOf(u)
+    const corpus = `${domain} ${it.name} ${it.description} ${it.tags.join(' ')} ${it.group}`
+    const base = {
+      kind: 'website' as const,
+      name: it.name,
+      description: it.description,
+      dependencies: [],
+      install: [{ title: '바로 열기', note: u.toString() }],
+      entryFiles: [],
+      tags: [...it.tags, `서재:${it.group}`],
+      files: [],
+      warnings: [],
+    }
+    const meta = { fullName: domain, description: it.description, defaultBranch: '', stars: 0, license: null, homepage: u.toString(), language: null, topics: [], pushedAt: '' }
+    return {
+      ...base,
+      id: webId(u),
+      source: { owner: domain, repo: '', path: '', url: u.toString() },
+      resolvedRef: '',
+      meta,
+      categories: categorize(base, meta, rules),
+      status: 'want' as const,
+      web: { url: u.toString(), domain, favicon: faviconFor(domain), siteType: detectSiteType(domain, u.pathname, corpus), pricing: it.pricing ?? detectPricing(corpus), fetchedWith: 'manual' as const },
+      addedAt: new Date(Date.parse(SEED_DATE) + (ITEMS.length + WEB_ITEMS.length - i) * 1000).toISOString(),
+    }
+  })
+}
+
 export function buildSeed(customCategories: CategoryRule[]): SavedSkill[] {
   const rules = allCategories(customCategories)
-  return ITEMS.map((it, i) => {
+  const web = buildWebSeed(rules)
+  const gh = ITEMS.map((it, i) => {
     const src = parseGitHubUrl(it.url)!
     const base = {
       kind: it.kind,
@@ -88,4 +152,5 @@ export function buildSeed(customCategories: CategoryRule[]): SavedSkill[] {
       addedAt: new Date(Date.parse(SEED_DATE) + (ITEMS.length - i) * 1000).toISOString(),
     }
   })
+  return [...gh, ...web]
 }

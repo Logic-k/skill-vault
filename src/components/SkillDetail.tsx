@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { categoryLabel } from '../lib/categorize'
-import { KIND_LABEL, type CategoryRule, type Dependency, type SavedSkill, type SubItem } from '../lib/types'
+import { KIND_LABEL, PRICING_LABEL, type CategoryRule, type Dependency, type Pricing, type SavedSkill, type SubItem } from '../lib/types'
+import { SITE_TYPES, SITE_TYPE_FALLBACK, siteTypeLabel } from '../data/siteTypes'
 import { formatBytes } from '../lib/analyzers/common'
 import { downloadZip } from '../lib/zip'
 import { Markdown } from './Markdown'
@@ -60,6 +61,7 @@ export function SkillDetail({ skill, saved, rules, busy, onSave, onRemove, onRea
     return () => window.removeEventListener('keydown', h)
   }, [onClose])
 
+  const isWeb = skill.kind === 'website'
   const cats = draft.manualCategories ?? draft.categories
   const toggleCat = (id: string) => {
     const next = cats.includes(id) ? cats.filter((c) => c !== id) : [...cats, id]
@@ -77,13 +79,25 @@ export function SkillDetail({ skill, saved, rules, busy, onSave, onRemove, onRea
         <header className="detail-head">
           <div>
             <div className="card-top">
-              <span className={`kind kind-${skill.kind}`}>{KIND_LABEL[skill.kind]}</span>
+              {isWeb ? (
+                <span className="kind kind-website">{siteTypeLabel(draft.web?.siteType ?? 'other').icon} {siteTypeLabel(draft.web?.siteType ?? 'other').label}</span>
+              ) : (
+                <span className={`kind kind-${skill.kind}`}>{KIND_LABEL[skill.kind]}</span>
+              )}
+              {isWeb && draft.web && draft.web.pricing !== 'unknown' && <span className={`pill price-${draft.web.pricing}`}>{PRICING_LABEL[draft.web.pricing]}</span>}
               {!skill.analyzedAt && <span className="pill muted">아직 분석 전</span>}
               {skill.analyzedAt && <span className="pill muted">분석 {new Date(skill.analyzedAt).toLocaleDateString()}</span>}
             </div>
-            <h2>{skill.name}</h2>
+            <h2>
+              {isWeb && <img className="favicon" src={skill.web?.favicon} alt="" />}
+              {isWeb ? (
+                <input className="title-input" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+              ) : (
+                skill.name
+              )}
+            </h2>
             <div className="card-repo">
-              <a href={treeUrl} target="_blank" rel="noreferrer">{skill.meta.fullName}{skill.source.path ? ` / ${skill.source.path}` : ''}</a>
+              <a href={isWeb ? skill.web?.url : treeUrl} target="_blank" rel="noreferrer">{isWeb ? skill.web?.url : `${skill.meta.fullName}${skill.source.path ? ` / ${skill.source.path}` : ''}`}</a>
               {skill.meta.stars > 0 && <span> · ★ {skill.meta.stars.toLocaleString()}</span>}
               {skill.meta.license && <span> · {skill.meta.license}</span>}
               {skill.meta.language && <span> · {skill.meta.language}</span>}
@@ -92,7 +106,12 @@ export function SkillDetail({ skill, saved, rules, busy, onSave, onRemove, onRea
           <button className="btn icon" onClick={onClose} aria-label="닫기">✕</button>
         </header>
 
-        <p className="detail-desc">{skill.description}</p>
+        {isWeb ? (
+          <textarea className="detail-desc desc-input" rows={3} placeholder="이 사이트가 무엇을 하는지 한두 줄로 적어 두세요." value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+        ) : (
+          <p className="detail-desc">{skill.description}</p>
+        )}
+        {isWeb && skill.web?.image && <img className="detail-cover" src={skill.web.image} alt="" />}
 
         {skill.warnings.length > 0 && (
           <div className="warn">
@@ -104,14 +123,40 @@ export function SkillDetail({ skill, saved, rules, busy, onSave, onRemove, onRea
 
         <div className="tabs">
           <button className={tab === 'overview' ? 'on' : ''} onClick={() => setTab('overview')}>개요</button>
+          {!isWeb && (<>
           <button className={tab === 'files' ? 'on' : ''} onClick={() => setTab('files')}>파일 {blobs.length > 0 && `(${blobs.length})`}</button>
           <button className={tab === 'readme' ? 'on' : ''} onClick={() => setTab('readme')} disabled={!skill.skillMd && !skill.readme}>
             {skill.skillMd ? 'SKILL.md' : 'README'}
           </button>
+          </>)}
         </div>
 
         {tab === 'overview' && (
           <div className="detail-body">
+            {isWeb && draft.web && (
+              <section>
+                <h4>사이트 유형과 가격 <small>(자동 감지, 바꿀 수 있어요)</small></h4>
+                <div className="chips">
+                  {[...SITE_TYPES, SITE_TYPE_FALLBACK].map((t) => (
+                    <button key={t.id} className={`chip ${draft.web?.siteType === t.id ? 'on' : ''}`} onClick={() => setDraft({ ...draft, web: { ...draft.web!, siteType: t.id } })}>
+                      {t.icon} {t.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="row" style={{ marginTop: 8 }}>
+                  {(Object.keys(PRICING_LABEL) as Pricing[]).map((p) => (
+                    <button key={p} className={`chip ${draft.web?.pricing === p ? 'on' : ''}`} onClick={() => setDraft({ ...draft, web: { ...draft.web!, pricing: p } })}>
+                      {PRICING_LABEL[p]}
+                    </button>
+                  ))}
+                </div>
+                <div className="row" style={{ marginTop: 10 }}>
+                  <a className="btn primary" href={draft.web.url} target="_blank" rel="noreferrer">사이트 열기 ↗</a>
+                  <CopyButton text={draft.web.url} />
+                  {draft.web.fetchedWith && <span className="muted small">정보 출처: {draft.web.fetchedWith === 'manual' ? '직접 입력' : draft.web.fetchedWith}</span>}
+                </div>
+              </section>
+            )}
             <section>
               <h4>카테고리 <small>(클릭해서 바꿀 수 있어요)</small></h4>
               <div className="chips">
@@ -158,7 +203,7 @@ export function SkillDetail({ skill, saved, rules, busy, onSave, onRemove, onRea
               </section>
             )}
 
-            <section>
+            {!isWeb && (<section>
               <h4>필요한 것 {draft.dependencies.length > 0 && <small>({draft.dependencies.length})</small>}</h4>
               {draft.dependencies.length === 0 && <p className="muted">{skill.analyzedAt ? '감지된 의존성이 없습니다. 마크다운만 있는 스킬일 가능성이 큽니다.' : '아직 분석하지 않았습니다.'}</p>}
               {Object.entries(grouped).map(([k, list]) => (
@@ -174,9 +219,9 @@ export function SkillDetail({ skill, saved, rules, busy, onSave, onRemove, onRea
                   </ul>
                 </div>
               ))}
-            </section>
+            </section>)}
 
-            <section>
+            {!isWeb && (<section>
               <h4>적용 방법</h4>
               {skill.install.map((st, i) => (
                 <div key={i} className="install">
@@ -218,7 +263,7 @@ export function SkillDetail({ skill, saved, rules, busy, onSave, onRemove, onRea
                   <span className="muted small">{blobs.length}개 파일, {formatBytes(blobs.reduce((n, f) => n + (f.size ?? 0), 0))}</span>
                 </div>
               )}
-            </section>
+            </section>)}
 
             {skill.subItems && skill.subItems.length > 0 && (
               <section>
@@ -274,7 +319,7 @@ export function SkillDetail({ skill, saved, rules, busy, onSave, onRemove, onRea
         <footer className="detail-foot">
           <div className="row">
             <button className="btn" onClick={onReanalyze} disabled={busy}>
-              {busy ? '분석 중…' : skill.analyzedAt ? '다시 분석' : 'GitHub에서 분석'}
+              {busy ? '분석 중…' : skill.analyzedAt ? '다시 분석' : isWeb ? '사이트 정보 읽기' : 'GitHub에서 분석'}
             </button>
             {saved && (
               <button className="btn danger" onClick={() => confirm('보관함에서 지울까요?') && onRemove()}>

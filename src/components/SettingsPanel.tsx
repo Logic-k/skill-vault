@@ -101,7 +101,7 @@ export function SettingsPanel({ settings, count, onClose }: { settings: Settings
 
           <section>
             <h4>예시 서재</h4>
-            <p className="muted small">{SEED_DATE} 기준 오픈소스 서재 목록 33건입니다. 이미 있는 항목은 건너뜁니다.</p>
+            <p className="muted small">{SEED_DATE} 기준 오픈소스 서재 33건과 AI 웹사이트 18곳입니다. 이미 있는 항목은 건너뜁니다.</p>
             <div className="row wrap">
               <button
                 className="btn"
@@ -110,7 +110,7 @@ export function SettingsPanel({ settings, count, onClose }: { settings: Settings
                   setMsg(`예시 ${n}건을 추가했습니다.`)
                 }}
               >
-                예시 33건 불러오기
+                예시 서재 불러오기 (GitHub 33 + AI 사이트 18)
               </button>
               <button
                 className="btn danger"
