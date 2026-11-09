@@ -35,33 +35,37 @@ export function Spine({ skill, rules, onOpen }: { skill: SavedSkill; rules: Cate
   const cats = skill.manualCategories ?? skill.categories
   const h = hash(skill.id)
   const hue = hueFor(cats[0] ?? 'etc')
-  const sat = 38 + (h % 18)
-  const light = 30 + ((h >> 4) % 18)
-  const height = 168 + ((h >> 8) % 44)
-  const width = skill.kind === 'website' ? 38 : 42 + ((h >> 12) % 14)
+  const sat = 36 + (h % 18)
+  const light = 28 + ((h >> 4) % 16)
+  const height = 156 + ((h >> 8) % 26)
   const isWeb = skill.kind === 'website'
   const style = {
     '--spine': `hsl(${hue} ${sat}% ${light}%)`,
     '--spine-dark': `hsl(${hue} ${sat}% ${Math.max(light - 14, 10)}%)`,
-    '--spine-light': `hsl(${hue} ${sat - 10}% ${Math.min(light + 22, 85)}%)`,
+    '--spine-light': `hsl(${hue} ${sat - 8}% ${Math.min(light + 26, 88)}%)`,
     height,
-    width,
   } as React.CSSProperties
-  const sub = isWeb ? siteTypeLabel(skill.web?.siteType ?? 'other').label : KIND_LABEL[skill.kind]
+  const sub = isWeb ? siteTypeLabel(skill.web?.siteType ?? 'other') : null
+  const subLabel = isWeb ? sub!.label : KIND_LABEL[skill.kind]
   return (
     <button
-      className={`spine ${isWeb ? 'spine-web' : 'spine-book'} ${skill.status === 'archived' ? 'spine-archived' : ''} ${skill.status === 'using' ? 'spine-using' : ''}`}
+      className={`cover ${isWeb ? 'cover-web' : 'cover-book'} ${skill.status === 'archived' ? 'cover-archived' : ''} ${skill.status === 'using' ? 'cover-using' : ''}`}
       style={style}
       onClick={onOpen}
-      title={`${skill.name}\n${sub} · ${cats.map((c) => categoryLabel(c, rules)).join(', ')}\n${skill.description.slice(0, 140)}`}
+      title={`${skill.name}
+${subLabel} · ${cats.map((c) => categoryLabel(c, rules)).join(', ')}
+${skill.description.slice(0, 140)}`}
     >
-      {isWeb ? (
-        <img className="spine-favicon" src={skill.web?.favicon} alt="" loading="lazy" />
-      ) : (
-        <span className="spine-band" />
-      )}
-      <span className="spine-title">{skill.name}</span>
-      {!isWeb && <span className="spine-foot">{skill.meta.stars > 0 ? `★${skill.meta.stars >= 1000 ? Math.round(skill.meta.stars / 1000) + 'k' : skill.meta.stars}` : ''}</span>}
+      <span className="cover-kind">
+        {isWeb ? <img className="cover-favicon" src={skill.web?.favicon} alt="" loading="lazy" /> : <span className="cover-dot" />}
+        <span>{isWeb ? sub!.icon + ' ' + sub!.label : KIND_LABEL[skill.kind]}</span>
+      </span>
+      <span className="cover-title">{skill.name}</span>
+      <span className="cover-foot">
+        <span className="cover-author">{isWeb ? skill.web?.domain : skill.meta.fullName.split('/')[0]}</span>
+        {!isWeb && skill.meta.stars > 0 && <span>★{skill.meta.stars >= 1000 ? Math.round(skill.meta.stars / 1000) + 'k' : skill.meta.stars}</span>}
+        {isWeb && skill.web && skill.web.pricing !== 'unknown' && <span>{skill.web.pricing === 'free' ? '무료' : skill.web.pricing === 'freemium' ? '부분 무료' : '유료'}</span>}
+      </span>
     </button>
   )
 }

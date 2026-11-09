@@ -292,7 +292,7 @@ export default function App() {
           ) : view === 'shelf' ? (
             <>
               <div className="shelf-tools">
-                <span className="muted small">{filtered.length}권 · 책등을 클릭하면 펼쳐집니다</span>
+                <span className="muted small">{filtered.length}권 · 책을 클릭하면 펼쳐집니다</span>
                 <div className="seg small">
                   <button className={groupBy === 'category' ? 'on' : ''} onClick={() => setGroupBy('category')}>주제별 칸</button>
                   <button className={groupBy === 'siteType' ? 'on' : ''} onClick={() => setGroupBy('siteType')}>사이트 유형별</button>
