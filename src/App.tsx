@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AddBar } from './components/AddBar'
-import { Bookshelf } from './components/Bookshelf'
+import { Bookshelf, type GroupBy } from './components/Bookshelf'
+import { IndexView } from './components/IndexView'
+import { Overview } from './components/Overview'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SkillCard, STATUS_LABEL } from './components/SkillCard'
 import { SkillDetail } from './components/SkillDetail'
 import { buildSeed } from './data/seed'
 import { SITE_TYPES, SITE_TYPE_FALLBACK } from './data/siteTypes'
 import { analyzeRepo } from './lib/analyzers'
-import { allCategories, categorize, categoryLabel } from './lib/categorize'
+import { allCategories, categorize } from './lib/categorize'
 import { parseGitHubUrl, setTokenProvider } from './lib/github'
 import { skillId, store, useStore } from './lib/store'
 import { KIND_LABEL, type RepoRef, type SavedSkill, type SkillKind, type SubItem } from './lib/types'
@@ -15,8 +17,7 @@ import { analyzeWebsite, normalizeUrl, webId, websiteShell } from './lib/web'
 
 setTokenProvider(() => store.get().settings.token)
 
-type View = 'shelf' | 'cards'
-type GroupBy = 'category' | 'kind' | 'siteType'
+type View = 'index' | 'shelf' | 'cards'
 
 function usePref<T extends string>(key: string, fallback: T): [T, (v: T) => void] {
   const [v, setV] = useState<T>(() => {
@@ -49,7 +50,7 @@ export default function App() {
   const [preview, setPreview] = useState<SavedSkill | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
-  const [view, setView] = usePref<View>('skill-vault/view', 'shelf')
+  const [view, setView] = usePref<View>('skill-vault/view2', 'index')
   const [groupBy, setGroupBy] = usePref<GroupBy>('skill-vault/groupBy', 'category')
   const [query, setQuery] = useState('')
   const [cat, setCat] = useState<string>('')
@@ -176,10 +177,19 @@ export default function App() {
     for (const s of skills) for (const k of pick(s)) m.set(k, (m.get(k) ?? 0) + 1)
     return m
   }
-  const catCounts = useMemo(() => count((s) => s.manualCategories ?? s.categories), [skills])
   const kindCounts = useMemo(() => count<SkillKind>((s) => (s.kind === 'website' ? [] : [s.kind])), [skills])
   const siteCounts = useMemo(() => count((s) => (s.kind === 'website' ? [s.web?.siteType ?? 'other'] : [])), [skills])
   const webTotal = skills.filter((s) => s.kind === 'website').length
+
+  const anyFilter = !!(query.trim() || cat || kind || source || siteType || status)
+  const clearFilters = () => {
+    setQuery('')
+    setCat('')
+    setKind('')
+    setSource('')
+    setSiteType('')
+    setStatus('')
+  }
 
   const close = useCallback(() => {
     setPreview(null)
@@ -194,122 +204,131 @@ export default function App() {
     <div className="app">
       <header className="top">
         <div className="brand">
-          <span className="logo">▣</span>
+          <span className="logo" aria-hidden="true"><i /><i /><i /></span>
           <div>
             <h1>Skill Vault</h1>
-            <div className="muted small">GitHub 스킬·플러그인과 AI 웹사이트를 한 서재에 모아 두고 바로 꺼내 쓰기</div>
+            <p className="tagline">GitHub 스킬·플러그인과 AI 웹사이트를 한 서재에 모아 두고 바로 꺼내 쓰기</p>
           </div>
         </div>
-        <div className="row">
-          <div className="seg">
-            <button className={view === 'shelf' ? 'on' : ''} onClick={() => setView('shelf')} title="서재 보기">📚 서재</button>
-            <button className={view === 'cards' ? 'on' : ''} onClick={() => setView('cards')} title="카드 보기">▦ 카드</button>
-          </div>
-          <button className="btn" onClick={() => setShowSettings(true)}>설정</button>
-        </div>
+        <button className="btn ghost" onClick={() => setShowSettings(true)}>설정</button>
       </header>
 
       <AddBar busy={busy} progress={progress} onAnalyze={onAnalyze} />
       {error && (
-        <div className="error">
+        <div className="error" role="alert">
           {error} <button className="btn link" onClick={() => setError('')}>닫기</button>
         </div>
       )}
 
-      <div className="layout">
-        <nav className="side">
-          <input className="input" placeholder="검색 (이름, 설명, 주소, 태그, 메모)" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <h4>출처</h4>
-          <ul className="filters">
-            <li><button className={source === '' ? 'on' : ''} onClick={() => setSource('')}>전체 <span>{skills.length}</span></button></li>
-            <li><button className={source === 'github' ? 'on' : ''} onClick={() => { setSource(source === 'github' ? '' : 'github'); setSiteType('') }}>🐙 GitHub <span>{skills.length - webTotal}</span></button></li>
-            <li><button className={source === 'web' ? 'on' : ''} onClick={() => { setSource(source === 'web' ? '' : 'web'); setKind('') }}>🌐 AI 웹사이트 <span>{webTotal}</span></button></li>
-          </ul>
-          <h4>주제</h4>
-          <ul className="filters">
-            {[...rules.map((r) => r.id), 'etc']
-              .filter((id) => catCounts.get(id))
-              .map((id) => (
-                <li key={id}>
-                  <button className={cat === id ? 'on' : ''} onClick={() => setCat(cat === id ? '' : id)}>
-                    {categoryLabel(id, rules)} <span>{catCounts.get(id)}</span>
-                  </button>
-                </li>
-              ))}
-          </ul>
+      {skills.length > 0 && (
+        <Overview
+          skills={skills}
+          rules={rules}
+          cat={cat}
+          source={source}
+          status={status}
+          onCat={(id) => setCat(cat === id ? '' : id)}
+          onSource={(s) => {
+            setSource(s)
+            if (s === 'github') setSiteType('')
+            if (s === 'web') setKind('')
+          }}
+          onStatus={setStatus}
+        />
+      )}
+
+      {skills.length > 0 && (
+        <div className="toolbar">
+          <input className="input search" type="search" placeholder="검색: 이름, 설명, 주소, 태그, 메모" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="검색" />
+          {view !== 'cards' && (
+            <div className="seg" role="group" aria-label="묶는 기준">
+              <button className={groupBy === 'category' ? 'on' : ''} onClick={() => setGroupBy('category')}>주제별</button>
+              <button className={groupBy === 'siteType' ? 'on' : ''} onClick={() => setGroupBy('siteType')}>사이트 유형별</button>
+              <button className={groupBy === 'kind' ? 'on' : ''} onClick={() => setGroupBy('kind')}>종류별</button>
+            </div>
+          )}
+          <div className="seg" role="group" aria-label="보기 방식">
+            <button className={view === 'index' ? 'on' : ''} onClick={() => setView('index')}>색인</button>
+            <button className={view === 'shelf' ? 'on' : ''} onClick={() => setView('shelf')}>서재</button>
+            <button className={view === 'cards' ? 'on' : ''} onClick={() => setView('cards')}>카드</button>
+          </div>
+        </div>
+      )}
+
+      {skills.length > 0 && (
+        <div className="subfilters">
           {webTotal > 0 && source !== 'github' && (
-            <>
-              <h4>사이트 유형</h4>
-              <ul className="filters">
-                {[...SITE_TYPES, SITE_TYPE_FALLBACK]
-                  .filter((t) => siteCounts.get(t.id))
-                  .map((t) => (
-                    <li key={t.id}>
-                      <button className={siteType === t.id ? 'on' : ''} onClick={() => setSiteType(siteType === t.id ? '' : t.id)}>
-                        {t.icon} {t.label} <span>{siteCounts.get(t.id)}</span>
-                      </button>
-                    </li>
-                  ))}
-              </ul>
-            </>
+            <div className="subfilter-group">
+              <span className="subfilter-label">사이트 유형</span>
+              {[...SITE_TYPES, SITE_TYPE_FALLBACK]
+                .filter((t) => siteCounts.get(t.id))
+                .map((t) => (
+                  <button key={t.id} className={`chip ${siteType === t.id ? 'on' : ''}`} onClick={() => setSiteType(siteType === t.id ? '' : t.id)} aria-pressed={siteType === t.id}>
+                    {t.label} <span>{siteCounts.get(t.id)}</span>
+                  </button>
+                ))}
+            </div>
           )}
           {source !== 'web' && (
-            <>
-              <h4>GitHub 종류</h4>
-              <ul className="filters">
-                {(Object.keys(KIND_LABEL) as SkillKind[])
-                  .filter((k) => kindCounts.get(k))
-                  .map((k) => (
-                    <li key={k}>
-                      <button className={kind === k ? 'on' : ''} onClick={() => setKind(kind === k ? '' : k)}>
-                        {KIND_LABEL[k]} <span>{kindCounts.get(k)}</span>
-                      </button>
-                    </li>
-                  ))}
-              </ul>
-            </>
+            <div className="subfilter-group">
+              <span className="subfilter-label">GitHub 종류</span>
+              {(Object.keys(KIND_LABEL) as SkillKind[])
+                .filter((k) => kindCounts.get(k))
+                .map((k) => (
+                  <button key={k} className={`chip ${kind === k ? 'on' : ''}`} onClick={() => setKind(kind === k ? '' : k)} aria-pressed={kind === k}>
+                    {KIND_LABEL[k]} <span>{kindCounts.get(k)}</span>
+                  </button>
+                ))}
+            </div>
           )}
-          <h4>상태</h4>
-          <ul className="filters">
-            {(Object.keys(STATUS_LABEL) as (keyof typeof STATUS_LABEL)[]).map((s) => (
-              <li key={s}>
-                <button className={status === s ? 'on' : ''} onClick={() => setStatus(status === s ? '' : s)}>
-                  {STATUS_LABEL[s]} <span>{skills.filter((x) => x.status === s).length}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        </div>
+      )}
 
-        <main className="grid-wrap">
-          {skills.length === 0 ? (
-            <div className="empty">
-              <p>아직 비어 있습니다. 위에 GitHub 링크나 AI 사이트 주소를 붙여넣어 시작하세요.</p>
-              <button className="btn" onClick={() => store.addMany(buildSeed(settings.customCategories), true)}>예시 서재 불러오기</button>
+      <main className="content">
+        {skills.length === 0 ? (
+          <div className="empty">
+            <h2>서재가 비어 있습니다</h2>
+            <p>위 입력창에 GitHub 링크나 AI 사이트 주소를 붙여넣으면 첫 책이 꽂힙니다.</p>
+            <button className="btn primary" onClick={() => store.addMany(buildSeed(settings.customCategories), true)}>예시 서재로 시작하기</button>
+          </div>
+        ) : (
+          <>
+            <div className="result-line">
+              <span>
+                {anyFilter ? (
+                  <>
+                    <b>{filtered.length}</b>권 <span className="muted">/ 전체 {skills.length}권</span>
+                  </>
+                ) : (
+                  <>
+                    <b>{skills.length}</b>권이 꽂혀 있습니다
+                  </>
+                )}
+              </span>
+              {anyFilter && (
+                <button className="btn link" onClick={clearFilters}>필터 지우기</button>
+              )}
             </div>
-          ) : filtered.length === 0 ? (
-            <div className="empty"><p>조건에 맞는 항목이 없습니다.</p></div>
-          ) : view === 'shelf' ? (
-            <>
-              <div className="shelf-tools">
-                <span className="muted small">{filtered.length}권 · 책을 클릭하면 펼쳐집니다</span>
-                <div className="seg small">
-                  <button className={groupBy === 'category' ? 'on' : ''} onClick={() => setGroupBy('category')}>주제별 칸</button>
-                  <button className={groupBy === 'siteType' ? 'on' : ''} onClick={() => setGroupBy('siteType')}>사이트 유형별</button>
-                  <button className={groupBy === 'kind' ? 'on' : ''} onClick={() => setGroupBy('kind')}>종류별</button>
-                </div>
+            {filtered.length === 0 ? (
+              <div className="empty">
+                <h2>맞는 책이 없습니다</h2>
+                <p>검색어나 필터를 줄여 보세요.</p>
+                <button className="btn" onClick={clearFilters}>필터 지우기</button>
               </div>
+            ) : view === 'index' ? (
+              <IndexView skills={filtered} rules={rules} groupBy={groupBy} onOpen={open} />
+            ) : view === 'shelf' ? (
               <Bookshelf skills={filtered} rules={rules} groupBy={groupBy} onOpen={open} />
-            </>
-          ) : (
-            <div className="grid">
-              {filtered.map((s) => (
-                <SkillCard key={s.id} skill={s} rules={rules} onOpen={() => open(s.id)} />
-              ))}
-            </div>
-          )}
-        </main>
-      </div>
+            ) : (
+              <div className="grid">
+                {filtered.map((s) => (
+                  <SkillCard key={s.id} skill={s} rules={rules} onOpen={() => open(s.id)} />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </main>
 
       {current && (
         <SkillDetail

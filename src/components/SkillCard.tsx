@@ -1,5 +1,6 @@
 import { siteTypeLabel } from '../data/siteTypes'
 import { categoryLabel } from '../lib/categorize'
+import { catColor } from '../lib/palette'
 import { KIND_LABEL, PRICING_LABEL, type CategoryRule, type SavedSkill } from '../lib/types'
 
 export const STATUS_LABEL = { want: '써볼 것', using: '사용 중', archived: '보관' } as const
@@ -9,11 +10,11 @@ export function SkillCard({ skill, rules, onOpen }: { skill: SavedSkill; rules: 
   const isWeb = skill.kind === 'website'
   const st = isWeb ? siteTypeLabel(skill.web?.siteType ?? 'other') : null
   return (
-    <button className={`card ${isWeb ? 'card-web' : ''}`} onClick={onOpen}>
+    <button className={`card ${isWeb ? 'card-web' : ''}`} onClick={onOpen} style={{ '--cat': catColor(cats[0] ?? 'etc', 8) } as React.CSSProperties}>
       {isWeb && skill.web?.image && <div className="card-cover" style={{ backgroundImage: `url("${skill.web.image}")` }} />}
       <div className="card-top">
         {isWeb ? (
-          <span className="kind kind-website">{st?.icon} {st?.label}</span>
+          <span className="kind kind-website">{st?.label}</span>
         ) : (
           <span className={`kind kind-${skill.kind}`}>{KIND_LABEL[skill.kind]}</span>
         )}
